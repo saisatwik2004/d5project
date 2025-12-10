@@ -59,17 +59,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'studentattendance.wsgi.application'
 
 # Database
+import os
+from pathlib import Path
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Database configuration
+# Use SQLite for simplicity (works everywhere)
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'attendance_db',  # Make sure this exists in MySQL
-        'USER': 'root',
-        'PASSWORD': 'satwik',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
