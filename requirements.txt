@@ -1,8 +1,8 @@
-# requirements.txt for Production (Render)
+# Core Django Framework
 Django==5.0.7
 asgiref==3.8.1
 
-# Face Recognition (headless for server)
+# Face Recognition & Computer Vision (headless for server)
 facenet-pytorch==2.6.0
 opencv-python-headless==4.10.0.84
 pillow>=10.4.0
@@ -10,10 +10,10 @@ numpy==1.26.4
 torch>=2.0.0
 torchvision>=0.15.0
 
-# ML & Processing
-scikit-learn==1.3.0
+# Machine Learning & Data Processing
+scikit-learn>=1.5.0
 
-# Networking
+# HTTP & Networking
 certifi==2024.7.4
 charset-normalizer==3.3.2
 idna==3.7
@@ -24,14 +24,20 @@ colorama==0.4.6
 filelock==3.15.4
 fsspec==2024.6.1
 python-decouple==3.8
+
+# Templating
 Jinja2==3.1.4
 MarkupSafe==2.1.5
+
+# Mathematical Libraries
 mpmath==1.3.0
 networkx==3.3
 
-# Database
+# Database Driver (MySQL)
 mysqlclient==2.2.0
 
-# Production Server
+# Production Server (WSGI)
 gunicorn==21.2.0
+
+# Static Files Serving
 whitenoise==6.6.0
