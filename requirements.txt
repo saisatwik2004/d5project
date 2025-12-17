@@ -1,43 +1,37 @@
-# Core Django Framework
-Django==5.0.7
-asgiref==3.8.1
-
-# Face Recognition & Computer Vision (headless for server)
-facenet-pytorch==2.6.0
-opencv-python-headless==4.10.0.84
-pillow>=10.4.0
-numpy==1.26.4
-torch>=2.0.0
-torchvision>=0.15.0
-
-# Machine Learning & Data Processing
-scikit-learn>=1.5.0
-
-# HTTP & Networking
-certifi==2024.7.4
-charset-normalizer==3.3.2
-idna==3.7
-requests>=2.31.0
-
-# Utilities
-colorama==0.4.6
-filelock==3.15.4
-fsspec==2024.6.1
-python-decouple==3.8
-
-# Templating
-Jinja2==3.1.4
-MarkupSafe==2.1.5
-
-# Mathematical Libraries
+asgiref==3.11.0
+certifi==2025.11.12
+charset-normalizer==3.4.4
+Django==4.1.13
+djongo==1.3.6
+dnspython==2.8.0
+facenet-pytorch==2.5.3
+filelock==3.20.0
+fsspec==2025.12.0
+idna==3.11
+Jinja2==3.1.6
+joblib==1.5.2
+MarkupSafe==3.0.3
 mpmath==1.3.0
-networkx==3.3
-
-# Database Driver (MySQL)
-mysqlclient==2.2.0
-
-# Production Server (WSGI)
-gunicorn==21.2.0
-
-# Static Files Serving
-whitenoise==6.6.0
+mysqlclient==2.2.7
+networkx==3.6
+numpy==2.2.6
+opencv-python==4.12.0.88
+pillow==12.0.0
+pygame==2.6.1
+pymongo==4.15.5
+PyMySQL==1.1.2
+python-decouple==3.8
+pytz==2025.2
+requests==2.32.5
+scikit-learn==1.7.2
+scipy==1.16.3
+setuptools==80.9.0
+sqlparse==0.2.4
+sympy==1.14.0
+threadpoolctl==3.6.0
+torch==2.9.1
+torchvision==0.24.1
+typing_extensions==4.15.0
+tzdata==2025.2
+urllib3==2.6.1
+whitenoise==6.11.0
