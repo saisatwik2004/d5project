@@ -1,32 +1,37 @@
+# requirements.txt for Production (Render)
+Django==5.0.7
 asgiref==3.8.1
+
+# Face Recognition (headless for server)
+facenet-pytorch==2.6.0
+opencv-python-headless==4.10.0.84
+pillow>=10.4.0
+numpy==1.26.4
+torch>=2.0.0
+torchvision>=0.15.0
+
+# ML & Processing
+scikit-learn==1.3.0
+
+# Networking
 certifi==2024.7.4
 charset-normalizer==3.3.2
+idna==3.7
+requests>=2.31.0
+
+# Utilities
 colorama==0.4.6
-Django==5.0.7
-facenet-pytorch==2.6.0
 filelock==3.15.4
 fsspec==2024.6.1
-idna==3.7
+python-decouple==3.8
 Jinja2==3.1.4
 MarkupSafe==2.1.5
 mpmath==1.3.0
 networkx==3.3
-numpy==1.26.4
-opencv-python==4.10.0.84
-pillow>=10.4.0  # Changed from pillow==10.2.0
-pygame==2.6.0
-requests==2.32.3
-sqlparse==0.5.0
-sympy==1.13.0
-torch==2.2.2
-torchvision==0.17.2
-tqdm==4.66.4
-typing_extensions==4.12.2
-tzdata==2024.1
-urllib3==2.2.2
-pytz==2024.1
-gunicorn
-whitenoise
-dj-database-url
-psycopg2-binary
-Pillow
+
+# Database
+mysqlclient==2.2.0
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.6.0
