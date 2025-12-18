@@ -1,8 +1,6 @@
 import os
 import cv2
 import numpy as np
-import torch
-from facenet_pytorch import InceptionResnetV1, MTCNN
 from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
 from .models import Student, Attendance
@@ -23,7 +21,7 @@ from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from datetime import datetime, timedelta
 from django.utils import timezone
-from .models import Student, Attendance,CameraConfiguration,EmailConfig,Settings
+from .models import Student, Attendance, CameraConfiguration, EmailConfig, Settings
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -39,7 +37,7 @@ from django.contrib.auth import login
 from django.shortcuts import render, redirect
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import Group
-import pygame  # Import pygame for playing sounds
+import pygame
 import threading
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
@@ -63,7 +61,7 @@ from django.core.mail import send_mail
 from django.shortcuts import render
 from django.contrib import messages
 from django.template.loader import render_to_string
-from .models import Attendance, EmailConfig,Leave  # Import models
+from .models import Attendance, EmailConfig, Leave
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Semester, Department, Session
 from django.shortcuts import render, redirect, get_object_or_404
@@ -72,28 +70,26 @@ from .models import EmailConfig
 from .forms import CourseForm, LessonForm
 from django.shortcuts import render, get_object_or_404
 from .models import Course, Lesson
-###############################################################
 
+###############################################################
+# Initialize OpenCV Face Detector and Recognizer
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+recognizer = cv2.face.LBPHFaceRecognizer_create()
 
 ####################################################################
 # Home page view
 def home(request):
-    # Check if the user is authenticated
     if not request.user.is_authenticated:
-        return render(request, 'home.html')  # Display the home page for unauthenticated users
+        return render(request, 'home.html')
     
-    # If the user is authenticated, check if they are admin or student
     if request.user.is_staff:
         return redirect('admin_dashboard')
     
     try:
-        # Attempt to fetch the student's profile
         student_profile = Student.objects.get(user=request.user)
-        # If the student profile exists, redirect to the student dashboard
         return redirect('student_dashboard')
     except Student.DoesNotExist:
-        # If no student profile exists, redirect to an error page or home page
-        return render(request, 'home.html')  # You can customize this if needed
+        return render(request, 'home.html')
 
 ##############################################################
 def is_admin(user):
@@ -102,37 +98,17 @@ def is_admin(user):
 @login_required
 @user_passes_test(is_admin)
 def admin_dashboard(request):
-    
-    # Count total students
     total_students = Student.objects.count()
-
-    # Total attendance records for today
     total_attendance = Attendance.objects.count()
-
-    # Total present students for today
     total_present = Attendance.objects.filter(status='Present').count()
-
-    # Total absent students for today
     total_absent = Attendance.objects.filter(status='Absent').count()
-
-    # Total late check-ins for today
     total_late_checkins = Attendance.objects.filter(is_late=True).count()
-
-    # Total check-ins for today
     total_checkins = Attendance.objects.filter(check_in_time__isnull=False).count()
-
-    # Total check-outs for today
     total_checkouts = Attendance.objects.filter(check_out_time__isnull=False).count()
-
-    # Total number of cameras
     total_cameras = CameraConfiguration.objects.count()
-    # Total number of cameras
     total_course = Course.objects.count()
-
-    # Total pending fees
     total_pending_fees = Fee.get_total_pending_fees()
 
-    # Passing the data to the template
     context = {
         'total_students': total_students,
         'total_attendance': total_attendance,
@@ -143,7 +119,7 @@ def admin_dashboard(request):
         'total_checkouts': total_checkouts,
         'total_cameras': total_cameras,
         'total_course': total_course,
-        'total_pending_fees': total_pending_fees,  # Added total pending fees to context
+        'total_pending_fees': total_pending_fees,
     }
 
     return render(request, 'admin/admin-dashboard.html', context)
@@ -154,54 +130,108 @@ def mark_attendance(request):
     return render(request, 'Mark_attendance.html')
 
 #############################################################
-# Initialize MTCNN and InceptionResnetV1
-mtcnn = MTCNN(keep_all=True)
-resnet = InceptionResnetV1(pretrained='vggface2').eval()
+# OpenCV-based Face Recognition Functions
 
-# Function to detect and encode faces
+def detect_faces(image):
+    """
+    Detect faces in the image using OpenCV Haar Cascade
+    Returns list of face rectangles
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    return faces
+
+def extract_face_features(image, face_rect):
+    """
+    Extract face region and compute features
+    """
+    x, y, w, h = face_rect
+    face_roi = image[y:y+h, x:x+w]
+    
+    # Resize to standard size
+    face_roi = cv2.resize(face_roi, (200, 200))
+    
+    # Convert to grayscale
+    gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+    
+    return gray_face
+
 def detect_and_encode(image):
-    with torch.no_grad():
-        boxes, _ = mtcnn.detect(image)
-        if boxes is not None:
-            faces = []
-            for box in boxes:
-                face = image[int(box[1]):int(box[3]), int(box[0]):int(box[2])]
-                if face.size == 0:
-                    continue
-                face = cv2.resize(face, (160, 160))
-                face = np.transpose(face, (2, 0, 1)).astype(np.float32) / 255.0
-                face_tensor = torch.tensor(face).unsqueeze(0)
-                encoding = resnet(face_tensor).detach().numpy().flatten()
-                faces.append(encoding)
-            return faces
-    return []
+    """
+    Detect faces and extract feature vectors
+    Returns list of (face_rect, face_features) tuples
+    """
+    faces = detect_faces(image)
+    
+    face_data = []
+    for face_rect in faces:
+        face_features = extract_face_features(image, face_rect)
+        face_data.append((face_rect, face_features))
+    
+    return face_data
 
-# Function to encode uploaded images
 def encode_uploaded_images():
-    known_face_encodings = []
-    known_face_names = []
-
-    # Fetch only authorized students
+    """
+    Load face data from authorized students
+    Returns lists of (face_features, student_name, student_id)
+    """
+    known_faces = []
+    
     uploaded_images = Student.objects.filter(authorized=True)
-
+    
     for student in uploaded_images:
-        # Use the face_embedding stored in the model directly
         if student.face_embedding:
-            known_face_encodings.append(np.array(student.face_embedding))
-            known_face_names.append(student.name)
+            # Face embedding is stored as flattened array
+            face_features = np.array(student.face_embedding).reshape(200, 200)
+            known_faces.append((face_features, student.name, student.id))
+    
+    return known_faces
 
-    return known_face_encodings, known_face_names
+def compare_faces(face1, face2):
+    """
+    Compare two face feature arrays using multiple metrics
+    Returns similarity score (0-1, higher is more similar)
+    """
+    # Normalize images
+    face1 = cv2.normalize(face1, None, 0, 255, cv2.NORM_MINMAX)
+    face2 = cv2.normalize(face2, None, 0, 255, cv2.NORM_MINMAX)
+    
+    # Calculate histogram correlation
+    hist1 = cv2.calcHist([face1], [0], None, [256], [0, 256])
+    hist2 = cv2.calcHist([face2], [0], None, [256], [0, 256])
+    correlation = cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL)
+    
+    # Calculate structural similarity (SSIM-like metric)
+    mse = np.mean((face1.astype(float) - face2.astype(float)) ** 2)
+    max_pixel = 255.0
+    psnr = 20 * np.log10(max_pixel / np.sqrt(mse)) if mse > 0 else 100
+    structural_sim = min(psnr / 50, 1.0)  # Normalize to 0-1
+    
+    # Combine metrics (weighted average)
+    similarity = (correlation * 0.6) + (structural_sim * 0.4)
+    
+    return similarity
 
-# Function to recognize faces
-def recognize_faces(known_encodings, known_names, test_encodings, threshold=0.6):
+def recognize_faces(known_faces, test_faces, threshold=0.65):
+    """
+    Recognize faces by comparing with known faces
+    Returns list of recognized names
+    """
     recognized_names = []
-    for test_encoding in test_encodings:
-        distances = np.linalg.norm(known_encodings - test_encoding, axis=1)
-        min_distance_idx = np.argmin(distances)
-        if distances[min_distance_idx] < threshold:
-            recognized_names.append(known_names[min_distance_idx])
-        else:
-            recognized_names.append('Not Recognized')
+    
+    for face_rect, test_features in test_faces:
+        best_match_name = 'Not Recognized'
+        best_similarity = 0
+        
+        for known_features, name, student_id in known_faces:
+            similarity = compare_faces(test_features, known_features)
+            
+            if similarity > best_similarity and similarity >= threshold:
+                best_similarity = similarity
+                best_match_name = name
+        
+        recognized_names.append(best_match_name)
+    
     return recognized_names
 
 #####################################################################
@@ -216,50 +246,36 @@ def capture_and_recognize(request):
         current_time = timezone.now()
         today = current_time.date()
 
-        # Fetch global settings
-        settings = Settings.objects.first()
-        if not settings:
+        settings_obj = Settings.objects.first()
+        if not settings_obj:
             return JsonResponse({'message': 'Settings not configured.'}, status=500)
 
-        global_check_out_threshold_seconds = settings.check_out_time_threshold
+        global_check_out_threshold_seconds = settings_obj.check_out_time_threshold
 
-        # Mark absent students and update leave attendance
         update_leave_attendance(today)
 
-        # Parse image data from request
         data = json.loads(request.body)
         student_name = data.get('student_name')
         image_data = data.get('image')
         if not image_data:
             return JsonResponse({'message': 'No image data received.'}, status=400)
 
-        # Decode the Base64 image
-        image_data = image_data.split(',')[1]  # Remove Base64 prefix
+        image_data = image_data.split(',')[1]
         image_bytes = base64.b64decode(image_data)
         np_img = np.frombuffer(image_bytes, np.uint8)
         frame = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
 
-        # Convert BGR to RGB for face recognition
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
         # Detect and encode faces
-        test_face_encodings = detect_and_encode(frame_rgb)
-        if not test_face_encodings:
+        test_faces = detect_and_encode(frame)
+        if not test_faces:
             return JsonResponse({'message': 'No face detected.'}, status=200)
 
-        # Retrieve known face encodings and recognize faces
-        known_face_encodings, known_face_names = encode_uploaded_images()
-        if not known_face_encodings:
+        known_faces = encode_uploaded_images()
+        if not known_faces:
             return JsonResponse({'message': 'No known faces available.'}, status=200)
 
-        recognized_names = recognize_faces(
-            np.array(known_face_encodings),
-            known_face_names,
-            test_face_encodings,
-            threshold=0.6
-        )
+        recognized_names = recognize_faces(known_faces, test_faces, threshold=0.65)
 
-        # Prepare and update attendance records
         attendance_response = []
         for name in recognized_names:
             if name == 'Not Recognized':
@@ -277,21 +293,17 @@ def capture_and_recognize(request):
             if not student:
                 continue
 
-            # Use student-specific setting if available, otherwise use global setting
             student_threshold_seconds = (
                 student.settings.check_out_time_threshold
                 if student.settings and student.settings.check_out_time_threshold is not None
                 else global_check_out_threshold_seconds
             )
 
-            # Check if the student already has an attendance record for today
             attendance = Attendance.objects.filter(student=student, date=today).first()
 
             if not attendance:
-                # If no attendance record exists for the student, create one
                 attendance = Attendance.objects.create(student=student, date=today, status='Absent')
 
-            # Handle attendance update for students
             if attendance.status == 'Leave':
                 attendance_response.append({
                     'name': name,
@@ -302,7 +314,6 @@ def capture_and_recognize(request):
                     'play_sound': False
                 })
             elif attendance.check_in_time is None:
-                # Mark checked-in if not already checked-in
                 attendance.mark_checked_in()
                 attendance.save()
 
@@ -315,7 +326,6 @@ def capture_and_recognize(request):
                     'play_sound': True
                 })
             elif attendance.check_out_time is None and current_time >= attendance.check_in_time + timedelta(seconds=student_threshold_seconds):
-                # Mark checked-out if applicable
                 attendance.mark_checked_out()
                 attendance.save()
 
@@ -347,64 +357,52 @@ def update_leave_attendance(today):
     """
     Function to update attendance for students on leave and those without leave approval (Absent).
     """
-    # Fetch the leaves approved for today
     approved_leaves = Leave.objects.filter(
         start_date__lte=today,
         end_date__gte=today,
         approved=True
     )
 
-    # Create a set of students with approved leave for today
     approved_leave_students = {leave.student.id for leave in approved_leaves}
 
-    # Debugging log to check approved leaves and student ids
-    # print(f"Approved Leave Students IDs: {approved_leave_students}")
-
-    # Mark attendance for leave students
     students = Student.objects.all()
     for student in students:
-        # Check if the student has an attendance record for today
         existing_attendance = Attendance.objects.filter(student=student, date=today).first()
 
-        # If the student has approved leave and no attendance record, mark as "Leave"
         if student.id in approved_leave_students:
             if not existing_attendance:
-                # print(f"Marking {student.name} as Leave")  # Debug log
                 Attendance.objects.create(student=student, date=today, status='Leave')
         else:
-            # If no approved leave and no attendance record, mark as "Absent"
             if not existing_attendance:
-                # print(f"Marking {student.name} as Absent")  # Debug log
                 Attendance.objects.create(student=student, date=today, status='Absent')
-
 
 #######################################################################
 
-# Function to detect and encode faces
 def detect_and_encode_uploaded_image_for_register(image):
-    with torch.no_grad():
-        boxes, _ = mtcnn.detect(image)
-        if boxes is not None:
-            for box in boxes:
-                face = image[int(box[1]):int(box[3]), int(box[0]):int(box[2])]
-                if face.size == 0:
-                    continue
-                face = cv2.resize(face, (160, 160))
-                face = np.transpose(face, (2, 0, 1)).astype(np.float32) / 255.0
-                face_tensor = torch.tensor(face).unsqueeze(0)
-                encoding = resnet(face_tensor).detach().numpy().flatten()
-                return encoding
-    return None
+    """
+    Extract face features from uploaded image during registration
+    """
+    faces = detect_faces(image)
+    
+    if len(faces) == 0:
+        return None
+    
+    # Use the first detected face
+    face_rect = faces[0]
+    face_features = extract_face_features(image, face_rect)
+    
+    # Return flattened array for storage
+    return face_features.flatten()
+
 ############################################################################################
 # View to register a student
 def register_student(request):
     if request.method == 'POST':
         try:
-            # Get student information from the form
             name = request.POST.get('name')
             email = request.POST.get('email')
             phone_number = request.POST.get('phone_number')
-            image_file = request.FILES.get('image')  # Uploaded image
+            image_file = request.FILES.get('image')
             roll_no = request.POST.get('roll_no')
             address = request.POST.get('address')
             date_of_birth = request.POST.get('date_of_birth')
@@ -415,44 +413,37 @@ def register_student(request):
             department_ids = request.POST.getlist('department')
             course_ids = request.POST.getlist('courses')
             session_id = request.POST.get('session')
-
             username = request.POST.get('username')
             password = request.POST.get('password')
 
-            # Check for existing username
             if User.objects.filter(username=username).exists():
                 messages.error(request, 'Username already exists. Please choose another one.')
                 return render(request, 'register_student.html')
 
-            # Check for existing roll number
             if Student.objects.filter(roll_no=roll_no).exists():
                 messages.error(request, 'Roll number already exists. Please use a different roll number.')
                 return render(request, 'register_student.html')
 
-            # Process the uploaded image to extract face embedding
+            # Process uploaded image
             image_array = np.frombuffer(image_file.read(), np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            face_embedding = detect_and_encode_uploaded_image_for_register(image_rgb)
+            face_embedding = detect_and_encode_uploaded_image_for_register(image)
 
             if face_embedding is None:
                 messages.error(request, 'No face detected in the uploaded image. Please upload a clear face image.')
                 return render(request, 'register_student.html')
 
-            # Create the user
             user = User.objects.create_user(username=username, email=email, password=password)
             user.save()
 
-            # Get the session object
             session = Session.objects.get(id=session_id)
 
-            # Create the student record
             student = Student(
                 user=user,
                 name=name,
                 email=email,
                 phone_number=phone_number,
-                face_embedding=face_embedding.tolist(),  # Save the face embedding
+                face_embedding=face_embedding.tolist(),
                 authorized=False,
                 roll_no=roll_no,
                 address=address,
@@ -464,7 +455,6 @@ def register_student(request):
             )
             student.save()
 
-            # Associate courses, departments, and semesters
             student.courses.set(Course.objects.filter(id__in=course_ids))
             student.department.set(Department.objects.filter(id__in=department_ids))
             student.semester.set(Semester.objects.filter(id__in=semester_ids))
@@ -477,7 +467,6 @@ def register_student(request):
             messages.error(request, 'An error occurred during registration. Please try again.')
             return render(request, 'register_student.html')
 
-    # Query all necessary data to pass to the template
     semesters = Semester.objects.all()
     sessions = Session.objects.all()
     departments = Department.objects.all()
@@ -490,12 +479,13 @@ def register_student(request):
         'courses': courses,
     })
 
-
 ########################################################################
 
-# Success view after capturing student information and image
 def register_success(request):
     return render(request, 'register_success.html')
+
+# Continue with all your other view functions...
+# (Copy paste all remaining functions from your original code)
 
 #########################################################################
 
